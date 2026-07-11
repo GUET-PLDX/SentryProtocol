@@ -14,7 +14,7 @@ constructor_args:
 template_args: []
 required_hardware: []
 depends:
-  - qdu-future/Referee
+  - pldx/Referee
 === END MANIFEST === */
 // clang-format on
 
