@@ -114,16 +114,17 @@ class SentryProtocol : public LibXR::Application {
 
   void OnBuyBulletTopic(const LibXR::ConstRawData& raw_data) {
     uint16_t buy_bullet_num = 0;
-    if (ReadTopicData(raw_data, buy_bullet_num) && referee_ != nullptr) {
-      referee_->SetNeedBullet(static_cast<uint8_t>(buy_bullet_num));
+    if (ReadTopicData(raw_data, buy_bullet_num) && referee_ != nullptr &&
+        referee_->AddNeedBullet(buy_bullet_num) == LibXR::ErrorCode::OK) {
       referee_->SendSentryPack();
     }
   }
 
   void OnRemoteBuyBulletTopic(const LibXR::ConstRawData& raw_data) {
-    uint8_t bullet_number = 0;
-    if (ReadTopicData(raw_data, bullet_number) && referee_ != nullptr) {
-      referee_->SetBulletRemote(bullet_number);
+    uint8_t remote_buy_bullet_request = 0;
+    if (ReadTopicData(raw_data, remote_buy_bullet_request) &&
+        remote_buy_bullet_request != 0U && referee_ != nullptr &&
+        referee_->RequestRemoteBulletExchange() == LibXR::ErrorCode::OK) {
       referee_->SendSentryPack();
     }
   }
