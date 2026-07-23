@@ -19,6 +19,24 @@ None
 - `buy_resurrection_topic_name`: 兑换立即复活 topic
 - `state_topic_name`: 切换姿态 topic
 
+## DualBoard Topic Semantics
+
+DualBoard is the producer of the decision topics. The payload semantics are
+fixed as follows:
+
+- `buy_bullet_topic_name` publishes a `uint16_t` bullet delta, which is passed
+  to `Referee::AddNeedBullet`.
+- Nonzero `uint8_t` values on each remote-buy topic cause one request: bullet
+  uses `Referee::RequestRemoteBulletExchange`, and HP uses
+  `Referee::SetHPRemote`.
+- `buy_resurrection_topic_name` publishes a `bool` level, including `false`,
+  to `Referee::SetRevivalRemote`.
+- `state_topic_name` publishes a `uint8_t` state level, including `0`, which
+  is passed to `SetSwitchMode`.
+
+Run `bash tests/decision_topic_static_regression.sh` from this module to check
+that these producer contracts remain unchanged.
+
 ## Template Arguments
 None
 
