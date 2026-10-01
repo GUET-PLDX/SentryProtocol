@@ -49,14 +49,15 @@ class SentryProtocol : public LibXR::Application {
         state_topic_(LibXR::Topic::CreateTopic<uint8_t>(state_topic_name)) {
     UNUSED(hw);
 
-    RegisterTopic<&SentryProtocol::OnBuyBulletTopic>(buy_bullet_topic_);
-    RegisterTopic<&SentryProtocol::OnRemoteBuyBulletTopic>(
+    RegisterTopic<uint16_t, &SentryProtocol::OnBuyBulletTopic>(
+        buy_bullet_topic_);
+    RegisterTopic<uint8_t, &SentryProtocol::OnRemoteBuyBulletTopic>(
         remote_buy_bullet_times_topic_);
-    RegisterTopic<&SentryProtocol::OnRemoteBuyHpTopic>(
+    RegisterTopic<uint8_t, &SentryProtocol::OnRemoteBuyHpTopic>(
         remote_buy_hp_times_topic_);
-    RegisterTopic<&SentryProtocol::OnBuyResurrectionTopic>(
+    RegisterTopic<bool, &SentryProtocol::OnBuyResurrectionTopic>(
         buy_resurrection_topic_);
-    RegisterTopic<&SentryProtocol::OnStateTopic>(state_topic_);
+    RegisterTopic<uint8_t, &SentryProtocol::OnStateTopic>(state_topic_);
 
     referee_suber_.StartWaiting();
     app.Register(*this);
@@ -90,64 +91,48 @@ class SentryProtocol : public LibXR::Application {
   }
 
  private:
-  template <void (SentryProtocol::*HANDLER)(const LibXR::ConstRawData&)>
+  /* Data 必须与主题创建时的负载类型一致，否则 RegisterCallback 会断言 */
+  template <typename Data, void (SentryProtocol::*HANDLER)(const Data&)>
   void RegisterTopic(LibXR::Topic& topic) {
     auto callback = LibXR::Topic::Callback::Create(
-        [](bool in_isr, SentryProtocol* self,
-           const LibXR::ConstRawData& raw_data) {
+        [](bool in_isr, SentryProtocol* self, const Data& data) {
           UNUSED(in_isr);
-          (self->*HANDLER)(raw_data);
+          (self->*HANDLER)(data);
         },
         this);
     topic.RegisterCallback(callback);
   }
 
-  template <typename Data>
-  static bool ReadTopicData(const LibXR::ConstRawData& raw_data, Data& data) {
-    if (raw_data.size_ < sizeof(Data)) {
-      return false;
-    }
-
-    LibXR::Memory::FastCopy(&data, raw_data.addr_, sizeof(Data));
-    return true;
-  }
-
-  void OnBuyBulletTopic(const LibXR::ConstRawData& raw_data) {
-    uint16_t buy_bullet_num = 0;
-    if (ReadTopicData(raw_data, buy_bullet_num) && referee_ != nullptr &&
+  void OnBuyBulletTopic(const uint16_t& buy_bullet_num) {
+    if (referee_ != nullptr &&
         referee_->AddNeedBullet(buy_bullet_num) == LibXR::ErrorCode::OK) {
       referee_->SendSentryPack();
     }
   }
 
-  void OnRemoteBuyBulletTopic(const LibXR::ConstRawData& raw_data) {
-    uint8_t remote_buy_bullet_request = 0;
-    if (ReadTopicData(raw_data, remote_buy_bullet_request) &&
-        remote_buy_bullet_request != 0U && referee_ != nullptr &&
+  void OnRemoteBuyBulletTopic(const uint8_t& remote_buy_bullet_request) {
+    if (remote_buy_bullet_request != 0U && referee_ != nullptr &&
         referee_->RequestRemoteBulletExchange() == LibXR::ErrorCode::OK) {
       referee_->SendSentryPack();
     }
   }
 
-  void OnRemoteBuyHpTopic(const LibXR::ConstRawData& raw_data) {
-    uint8_t buy_hp = 0;
-    if (ReadTopicData(raw_data, buy_hp) && buy_hp != 0 && referee_ != nullptr) {
+  void OnRemoteBuyHpTopic(const uint8_t& buy_hp) {
+    if (buy_hp != 0 && referee_ != nullptr) {
       referee_->SetHPRemote();
       referee_->SendSentryPack();
     }
   }
 
-  void OnBuyResurrectionTopic(const LibXR::ConstRawData& raw_data) {
-    bool buy_resurrection = false;
-    if (ReadTopicData(raw_data, buy_resurrection) && referee_ != nullptr) {
+  void OnBuyResurrectionTopic(const bool& buy_resurrection) {
+    if (referee_ != nullptr) {
       referee_->SetRevivalRemote(buy_resurrection);
       referee_->SendSentryPack();
     }
   }
 
-  void OnStateTopic(const LibXR::ConstRawData& raw_data) {
-    uint8_t state = 0;
-    if (ReadTopicData(raw_data, state) && referee_ != nullptr) {
+  void OnStateTopic(const uint8_t& state) {
+    if (referee_ != nullptr) {
       referee_->SetSwitchMode(static_cast<State>(state));
       referee_->SendSentryPack();
     }

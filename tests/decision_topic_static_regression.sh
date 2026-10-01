@@ -24,7 +24,7 @@ handler_body() {
   local handler="$1"
 
   tr -d '\r' <"${SOURCE_FILE}" | awk -v handler="${handler}" '
-    !in_handler && index($0, "void " handler "(const LibXR::ConstRawData& raw_data) {") {
+    !in_handler && index($0, "void " handler "(const ") {
       in_handler = 1
     }
     in_handler {
@@ -80,29 +80,36 @@ require_source 'remote_buy_hp_times_topic_( LibXR::Topic::CreateTopic<uint8_t>(r
 require_source 'buy_resurrection_topic_( LibXR::Topic::CreateTopic<bool>(buy_resurrection_topic_name)),'
 require_source 'state_topic_(LibXR::Topic::CreateTopic<uint8_t>(state_topic_name)) {'
 
+# Handlers receive typed payloads; the registered type must match the topic.
+require_source 'RegisterTopic<uint16_t, &SentryProtocol::OnBuyBulletTopic>( buy_bullet_topic_);'
+require_source 'RegisterTopic<uint8_t, &SentryProtocol::OnRemoteBuyBulletTopic>( remote_buy_bullet_times_topic_);'
+require_source 'RegisterTopic<uint8_t, &SentryProtocol::OnRemoteBuyHpTopic>( remote_buy_hp_times_topic_);'
+require_source 'RegisterTopic<bool, &SentryProtocol::OnBuyResurrectionTopic>( buy_resurrection_topic_);'
+require_source 'RegisterTopic<uint8_t, &SentryProtocol::OnStateTopic>(state_topic_);'
+
 # Every handler is compared in full after whitespace normalization. This rejects
 # extra statements and gates around otherwise-valid predicate/API fragments.
 require_handler_structure 'OnBuyBulletTopic' \
-  'void OnBuyBulletTopic(const LibXR::ConstRawData& raw_data) { uint16_t buy_bullet_num = 0; if (ReadTopicData(raw_data, buy_bullet_num) && referee_ != nullptr && referee_->AddNeedBullet(buy_bullet_num) == LibXR::ErrorCode::OK) { referee_->SendSentryPack(); } }'
+  'void OnBuyBulletTopic(const uint16_t& buy_bullet_num) { if (referee_ != nullptr && referee_->AddNeedBullet(buy_bullet_num) == LibXR::ErrorCode::OK) { referee_->SendSentryPack(); } }'
 require_handler_count 'OnBuyBulletTopic' 'AddNeedBullet('
 require_handler_structure 'OnRemoteBuyBulletTopic' \
-  'void OnRemoteBuyBulletTopic(const LibXR::ConstRawData& raw_data) { uint8_t remote_buy_bullet_request = 0; if (ReadTopicData(raw_data, remote_buy_bullet_request) && remote_buy_bullet_request != 0U && referee_ != nullptr && referee_->RequestRemoteBulletExchange() == LibXR::ErrorCode::OK) { referee_->SendSentryPack(); } }'
+  'void OnRemoteBuyBulletTopic(const uint8_t& remote_buy_bullet_request) { if (remote_buy_bullet_request != 0U && referee_ != nullptr && referee_->RequestRemoteBulletExchange() == LibXR::ErrorCode::OK) { referee_->SendSentryPack(); } }'
 require_handler_count 'OnRemoteBuyBulletTopic' 'RequestRemoteBulletExchange('
 require_handler_structure 'OnRemoteBuyHpTopic' \
-  'void OnRemoteBuyHpTopic(const LibXR::ConstRawData& raw_data) { uint8_t buy_hp = 0; if (ReadTopicData(raw_data, buy_hp) && buy_hp != 0 && referee_ != nullptr) { referee_->SetHPRemote(); referee_->SendSentryPack(); } }'
+  'void OnRemoteBuyHpTopic(const uint8_t& buy_hp) { if (buy_hp != 0 && referee_ != nullptr) { referee_->SetHPRemote(); referee_->SendSentryPack(); } }'
 require_handler_count 'OnRemoteBuyHpTopic' 'SetHPRemote('
 require_handler_structure 'OnBuyResurrectionTopic' \
-  'void OnBuyResurrectionTopic(const LibXR::ConstRawData& raw_data) { bool buy_resurrection = false; if (ReadTopicData(raw_data, buy_resurrection) && referee_ != nullptr) { referee_->SetRevivalRemote(buy_resurrection); referee_->SendSentryPack(); } }'
+  'void OnBuyResurrectionTopic(const bool& buy_resurrection) { if (referee_ != nullptr) { referee_->SetRevivalRemote(buy_resurrection); referee_->SendSentryPack(); } }'
 require_handler_count 'OnBuyResurrectionTopic' 'SetRevivalRemote('
 require_handler_structure 'OnStateTopic' \
-  'void OnStateTopic(const LibXR::ConstRawData& raw_data) { uint8_t state = 0; if (ReadTopicData(raw_data, state) && referee_ != nullptr) { referee_->SetSwitchMode(static_cast<State>(state)); referee_->SendSentryPack(); } }'
+  'void OnStateTopic(const uint8_t& state) { if (referee_ != nullptr) { referee_->SetSwitchMode(static_cast<State>(state)); referee_->SendSentryPack(); } }'
 require_handler_count 'OnStateTopic' 'SetSwitchMode('
 
 write_remote_bullet_moved_mutation() {
   local output_file="$1"
 
   tr -d '\r' <"${SOURCE_FILE}" | awk '
-    /void OnRemoteBuyBulletTopic\(const LibXR::ConstRawData& raw_data\) \{/ {
+    /void OnRemoteBuyBulletTopic\(const / {
       in_handler = 1
     }
     in_handler {
@@ -125,7 +132,7 @@ write_remote_hp_moved_mutation() {
   local output_file="$1"
 
   tr -d '\r' <"${SOURCE_FILE}" | awk '
-    /void OnRemoteBuyHpTopic\(const LibXR::ConstRawData& raw_data\) \{/ {
+    /void OnRemoteBuyHpTopic\(const / {
       in_handler = 1
     }
     in_handler {
@@ -148,10 +155,10 @@ write_resurrection_gate_mutation() {
   local output_file="$1"
 
   tr -d '\r' <"${SOURCE_FILE}" | awk '
-    /void OnBuyResurrectionTopic\(const LibXR::ConstRawData& raw_data\) \{/ {
+    /void OnBuyResurrectionTopic\(const / {
       in_handler = 1
     }
-    in_handler && !added_gate && $0 == "    if (ReadTopicData(raw_data, buy_resurrection) && referee_ != nullptr) {" {
+    in_handler && !added_gate && $0 == "    if (referee_ != nullptr) {" {
       print "    if (buy_resurrection) {"
       added_gate = 1
     }
@@ -171,10 +178,10 @@ write_state_gate_mutation() {
   local output_file="$1"
 
   tr -d '\r' <"${SOURCE_FILE}" | awk '
-    /void OnStateTopic\(const LibXR::ConstRawData& raw_data\) \{/ {
+    /void OnStateTopic\(const / {
       in_handler = 1
     }
-    in_handler && !added_gate && $0 == "    if (ReadTopicData(raw_data, state) && referee_ != nullptr) {" {
+    in_handler && !added_gate && $0 == "    if (referee_ != nullptr) {" {
       print "    if (state != 0U) {"
       added_gate = 1
     }
