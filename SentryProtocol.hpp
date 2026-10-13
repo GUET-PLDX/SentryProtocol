@@ -3,34 +3,23 @@
 // clang-format off
 /* === MODULE MANIFEST V2 ===
 module_description: 哨兵裁判系统决策发送模块
-constructor_args:
-  - referee: '@&ref'
-  - referee_sentry_tp_name: "robot_game_ref"
-  - buy_bullet_topic_name: "sentry_buy_bullet_num"
-  - remote_buy_bullet_times_topic_name: "sentry_remote_buy_bullet_times"
-  - remote_buy_hp_times_topic_name: "sentry_remote_buy_hp_times"
-  - buy_resurrection_topic_name: "sentry_buy_resurrection"
-  - state_topic_name: "sentry_state"
-template_args: []
-required_hardware: []
 depends:
-  - pldx/Referee
+- id: GUET-PLDX/Referee
 === END MANIFEST === */
 // clang-format on
 
 #include <cstdint>
 
 #include "Referee.hpp"
-#include "app_framework.hpp"
+#include "libxr.hpp"
 #include "libxr_def.hpp"
 #include "message.hpp"
 
-class SentryProtocol : public LibXR::Application {
+class SentryProtocol {
  public:
   using State = Referee::State;
 
-  SentryProtocol(LibXR::HardwareContainer& hw, LibXR::ApplicationManager& app,
-                 Referee* referee, const char* referee_sentry_tp_name,
+  SentryProtocol(Referee* referee, const char* referee_sentry_tp_name,
                  const char* buy_bullet_topic_name,
                  const char* remote_buy_bullet_times_topic_name,
                  const char* remote_buy_hp_times_topic_name,
@@ -47,8 +36,6 @@ class SentryProtocol : public LibXR::Application {
         buy_resurrection_topic_(
             LibXR::Topic::CreateTopic<bool>(buy_resurrection_topic_name)),
         state_topic_(LibXR::Topic::CreateTopic<uint8_t>(state_topic_name)) {
-    UNUSED(hw);
-
     RegisterTopic<uint16_t, &SentryProtocol::OnBuyBulletTopic>(
         buy_bullet_topic_);
     RegisterTopic<uint8_t, &SentryProtocol::OnRemoteBuyBulletTopic>(
@@ -60,7 +47,6 @@ class SentryProtocol : public LibXR::Application {
     RegisterTopic<uint8_t, &SentryProtocol::OnStateTopic>(state_topic_);
 
     referee_suber_.StartWaiting();
-    app.Register(*this);
   }
 
   void SetSwitchMode(State state) {
@@ -72,7 +58,7 @@ class SentryProtocol : public LibXR::Application {
     referee_->SendSentryPack();
   }
 
-  void OnMonitor() override {
+  void OnMonitor() {
     if (referee_suber_.Available()) {
       referee_pack_ = referee_suber_.GetData();
       referee_suber_.StartWaiting();
