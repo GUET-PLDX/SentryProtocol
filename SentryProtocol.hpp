@@ -4,7 +4,7 @@
 /* === MODULE MANIFEST V2 ===
 module_description: 哨兵裁判系统决策发送模块
 depends:
-- pldx/Referee@master
+- pldx/Referee@mc02-static
 === END MANIFEST === */
 // clang-format on
 
