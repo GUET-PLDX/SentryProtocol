@@ -19,12 +19,14 @@ class SentryProtocol {
  public:
   using State = Referee::State;
 
-  SentryProtocol(Referee* referee, const char* referee_sentry_tp_name,
-                 const char* buy_bullet_topic_name,
-                 const char* remote_buy_bullet_times_topic_name,
-                 const char* remote_buy_hp_times_topic_name,
-                 const char* buy_resurrection_topic_name,
-                 const char* state_topic_name)
+  SentryProtocol(
+      Referee* referee, const char* referee_sentry_tp_name = "robot_game_ref",
+      const char* buy_bullet_topic_name = "sentry_buy_bullet_num",
+      const char* remote_buy_bullet_times_topic_name =
+          "sentry_remote_buy_bullet_times",
+      const char* remote_buy_hp_times_topic_name = "sentry_remote_buy_hp_times",
+      const char* buy_resurrection_topic_name = "sentry_buy_resurrection",
+      const char* state_topic_name = "sentry_state")
       : referee_(referee),
         referee_suber_(referee_sentry_tp_name),
         buy_bullet_topic_(
