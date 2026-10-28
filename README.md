@@ -34,9 +34,6 @@ fixed as follows:
 - `state_topic_name` publishes a `uint8_t` state level, including `0`, which
   is passed to `SetSwitchMode`.
 
-Run `bash tests/decision_topic_static_regression.sh` from this module to check
-that these producer contracts remain unchanged.
-
 ## Template Arguments
 None
 
