@@ -126,6 +126,8 @@ class SentryProtocol {
     }
   }
 
+  Referee::RobotGameRefereePack referee_pack_{};
+
   Referee* referee_;
   LibXR::Topic::ASyncSubscriber<Referee::RobotGameRefereePack> referee_suber_;
   LibXR::Topic buy_bullet_topic_;
@@ -133,6 +135,4 @@ class SentryProtocol {
   LibXR::Topic remote_buy_hp_times_topic_;
   LibXR::Topic buy_resurrection_topic_;
   LibXR::Topic state_topic_;
-
-  Referee::RobotGameRefereePack referee_pack_{};
 };
