@@ -5,9 +5,11 @@
 module_description: 哨兵裁判系统决策发送模块
 depends:
 - id: GUET-PLDX/Referee
+  ref: 4eb967e28d76bfb3004ddb03a565b10741f1d888
 === END MANIFEST === */
 // clang-format on
 
+#include <atomic>
 #include <cstdint>
 
 #include "Referee.hpp"
@@ -56,9 +58,16 @@ class SentryProtocol {
       return;
     }
 
-    referee_->SetSwitchMode(state);
-    referee_->SendSentryPack();
+    const auto result = referee_->SetSwitchMode(state);
+    RecordResult(result);
+    if (result == LibXR::ErrorCode::OK)
+      RecordResult(referee_->SendSentryPack());
   }
+
+  LibXR::ErrorCode GetLastRequestError() const {
+    return last_request_error_.load();
+  }
+  uint32_t GetRejectedRequests() const { return rejected_requests_.load(); }
 
   void OnMonitor() {
     if (referee_suber_.Available()) {
@@ -70,15 +79,20 @@ class SentryProtocol {
       return;
     }
 
-    const bool IS_DEAD = referee_pack_.robot_status.max_hp != 0 &&
-                         referee_pack_.robot_status.remain_hp == 0;
-    if (IS_DEAD) {
-      referee_->SetConfirmRevival(true);
-      referee_->SendSentryPack();
-    }
+    const bool fresh =
+        referee_pack_.referee_online &&
+        (referee_pack_.source_fresh_mask & Referee::SOURCE_ROBOT_STATUS) != 0U;
+    const bool is_dead = fresh && referee_pack_.robot_status.max_hp != 0U &&
+                         referee_pack_.robot_status.remain_hp == 0U;
+    referee_->SetConfirmRevival(is_dead);
+    if (is_dead) RecordResult(referee_->SendSentryPack());
   }
 
  private:
+  void RecordResult(LibXR::ErrorCode result) {
+    last_request_error_ = result;
+    if (result != LibXR::ErrorCode::OK) ++rejected_requests_;
+  }
   /* Data 必须与主题创建时的负载类型一致，否则 RegisterCallback 会断言 */
   template <typename Data, void (SentryProtocol::*HANDLER)(const Data&)>
   void RegisterTopic(LibXR::Topic& topic) {
@@ -92,41 +106,46 @@ class SentryProtocol {
   }
 
   void OnBuyBulletTopic(const uint16_t& buy_bullet_num) {
-    if (referee_ != nullptr &&
-        referee_->AddNeedBullet(buy_bullet_num) == LibXR::ErrorCode::OK) {
-      referee_->SendSentryPack();
-    }
+    if (referee_ == nullptr) return;
+    const auto result = referee_->AddNeedBullet(buy_bullet_num);
+    RecordResult(result);
+    if (result == LibXR::ErrorCode::OK)
+      RecordResult(referee_->SendSentryPack());
   }
 
   void OnRemoteBuyBulletTopic(const uint8_t& remote_buy_bullet_request) {
-    if (remote_buy_bullet_request != 0U && referee_ != nullptr &&
-        referee_->RequestRemoteBulletExchange() == LibXR::ErrorCode::OK) {
-      referee_->SendSentryPack();
-    }
+    if (remote_buy_bullet_request == 0U || referee_ == nullptr) return;
+    const auto result = referee_->RequestRemoteBulletExchange();
+    RecordResult(result);
+    if (result == LibXR::ErrorCode::OK)
+      RecordResult(referee_->SendSentryPack());
   }
 
   void OnRemoteBuyHpTopic(const uint8_t& buy_hp) {
     if (buy_hp != 0 && referee_ != nullptr) {
-      referee_->SetHPRemote();
-      referee_->SendSentryPack();
+      const auto result = referee_->SetHPRemote();
+      RecordResult(result);
+      if (result == LibXR::ErrorCode::OK)
+        RecordResult(referee_->SendSentryPack());
     }
   }
 
   void OnBuyResurrectionTopic(const bool& buy_resurrection) {
     if (referee_ != nullptr) {
       referee_->SetRevivalRemote(buy_resurrection);
-      referee_->SendSentryPack();
+      RecordResult(referee_->SendSentryPack());
     }
   }
 
   void OnStateTopic(const uint8_t& state) {
     if (referee_ != nullptr) {
-      referee_->SetSwitchMode(static_cast<State>(state));
-      referee_->SendSentryPack();
+      SetSwitchMode(static_cast<State>(state));
     }
   }
 
   Referee::RobotGameRefereePack referee_pack_{};
+  std::atomic<LibXR::ErrorCode> last_request_error_{LibXR::ErrorCode::OK};
+  std::atomic<uint32_t> rejected_requests_{0};
 
   Referee* referee_;
   LibXR::Topic::ASyncSubscriber<Referee::RobotGameRefereePack> referee_suber_;

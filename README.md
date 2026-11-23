@@ -3,9 +3,10 @@
 哨兵裁判系统决策发送模块。
 
 - 通过 `referee_sentry_tp_name` 订阅 `Referee::RobotGameRefereePack`
-- 检测到 `remain_hp == 0` 后，在 `OnMonitor()` 中持续调用 `Referee` 发送确认复活
-- 通过 SharedTopic 指令 Topic 覆盖哨兵决策变量，并立即发送哨兵决策包
-- 通过 `SetSwitchMode()` 可在本地直接切换姿态
+- 在线且机器人状态新鲜、`remain_hp == 0` 时，在 `OnMonitor()` 中持续提交确认复活；存活或过期后撤销
+- 通过 SharedTopic 指令 Topic 合并哨兵决策意图，由 Referee 原线程异步发送
+- 通过 `SetSwitchMode()` 提交 1/2/3 三种基础姿态，结果由裁判 `0x020D` 确认
+- `GetLastRequestError()` 与 `GetRejectedRequests()` 提供请求诊断，购买基线未建立、计数越界和非法姿态均可观察
 
 ## Required Hardware
 None
@@ -31,14 +32,22 @@ fixed as follows:
   `Referee::SetHPRemote`.
 - `buy_resurrection_topic_name` publishes a `bool` level, including `false`,
   to `Referee::SetRevivalRemote`.
-- `state_topic_name` publishes a `uint8_t` state level, including `0`, which
-  is passed to `SetSwitchMode`.
+- `state_topic_name` publishes a `uint8_t` state level. Only `1`, `2`, and `3`
+  are admitted by `SetSwitchMode`; `0` and `4`–`6` do not overwrite the last
+  valid stance. The initial stance is `3`.
+
+Referee establishes purchase counters from the first valid `0x020D` feedback.
+Before that baseline, purchase requests return `STATE_ERR`. Remote requests
+advance by one only after the previous increment is confirmed by fresh feedback;
+UART completion does not confirm a purchase. Limits are 2047 cumulative bullets
+and 15 remote requests per category, with no wraparound. Topic callbacks and
+`OnMonitor()` do not wait for UART transmission or bypass its shared limiter.
 
 ## Template Arguments
 None
 
 ## Depends
-- qdu-future/Referee
+- GUET-PLDX/Referee
 
 ## LibXR 2.0 静态装配
 
